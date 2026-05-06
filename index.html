@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rian Ready - ระบบยืมร่มสภานักเรียน</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Kanit', sans-serif; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); }
+        .marquee-container { background: rgba(255, 255, 255, 0.9); padding: 14px 0; overflow: hidden; position: sticky; top: 0; z-index: 50; border-bottom: 1px solid #bae6fd; }
+        .marquee-text { display: inline-block; white-space: nowrap; animation: marquee 20s linear infinite; color: #0369a1; font-weight: 600; }
+        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .umbrella-card { transition: all 0.3s; background: white; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); cursor: pointer; }
+        .umbrella-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
+        .status-available { border-bottom: 6px solid #22c55e; }
+        .status-borrowed { border-bottom: 6px solid #ef4444; }
+        .modal { display: none; backdrop-filter: blur(8px); position: fixed; inset: 0; align-items: center; justify-content: center; z-index: 100; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body>
+
+    <div class="marquee-container">
+        <div class="marquee-text">ยินดีต้อนรับสู่ระบบ Rian Ready ยืมร่มสภานักเรียน โรงเรียนชัยนาทพิทยาคม</div>
+    </div>
+
+    <div class="max-w-6xl mx-auto px-5 py-8">
+        <header class="flex justify-between items-center mb-10">
+            <div>
+                <h1 class="text-4xl font-black text-sky-900">Rian Ready</h1>
+                <p class="text-sky-600">ระบบยืม-คืนร่มสภานักเรียน</p>
+            </div>
+            <button onclick="openQuickReturn()" class="bg-red-500 text-white px-6 py-2 rounded-xl font-bold shadow-lg">คืนร่ม</button>
+        </header>
+
+        <div id="umbrellaGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            <!-- ข้อมูลร่มจะแสดงที่นี่ -->
+        </div>
+    </div>
+
+    <!-- Modal ฟอร์มยืม/คืน -->
+    <div id="borrowModal" class="modal bg-sky-900/20 p-5">
+        <div class="bg-white p-8 rounded-[32px] w-full max-w-sm">
+            <h2 id="modalTitle" class="text-2xl font-bold mb-6 text-sky-900 text-center">ร่มหมายเลข</h2>
+            <div class="space-y-4">
+                <input type="hidden" id="selectedUmbrellaId">
+                <input type="text" id="manualUmbrellaId" placeholder="เลขร่ม (ถ้าคืนร่ม)" class="hidden w-full p-4 bg-sky-50 rounded-2xl border">
+                <input type="text" id="studentName" placeholder="ชื่อ-นามสกุล" class="w-full p-4 bg-gray-50 rounded-2xl border">
+                <input type="text" id="studentId" placeholder="เลขประจำตัวนักเรียน" class="w-full p-4 bg-gray-50 rounded-2xl border">
+                <button id="btnSubmit" onclick="submitData()" class="w-full bg-blue-500 text-white py-4 rounded-2xl font-bold">ยืนยัน</button>
+                <button onclick="closeModal()" class="w-full text-gray-400">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // เปลี่ยน URL นี้เป็น Web App URL จาก Google Apps Script ของคุณ
+        const API_URL = "https://script.google.com/macros/s/AKfycbwzFRfaiPKrhfiiBiYWqNkI1CMaIsPIgCfpX_9eH1AWnuhnfWLSoasnv5KM4zU-paG-NQ/exec";
+        
+        let currentType = 'borrow';
+
+        async function refreshData() {
+            const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'getUmbrellaStatus' }) });
+            const data = await res.json();
+            const grid = document.getElementById('umbrellaGrid');
+            grid.innerHTML = '';
+            
+            Object.keys(data).forEach(id => {
+                const card = document.createElement('div');
+                card.className = `umbrella-card p-6 flex flex-col items-center ${data[id] === 'available' ? 'status-available' : 'status-borrowed'}`;
+                card.onclick = () => {
+                    currentType = data[id] === 'available' ? 'borrow' : 'return';
+                    openModal(id);
+                };
+                card.innerHTML = `<div class="font-bold text-sky-900">${id}</div><div class="text-xs mt-2">${data[id] === 'available' ? 'ว่าง' : 'ถูกยืม'}</div>`;
+                grid.appendChild(card);
+            });
+        }
+
+        function openModal(id) {
+            document.getElementById('selectedUmbrellaId').value = id;
+            document.getElementById('modalTitle').innerText = id;
+            document.getElementById('borrowModal').classList.add('active');
+        }
+
+        function openQuickReturn() {
+            currentType = 'return';
+            document.getElementById('manualUmbrellaId').classList.remove('hidden');
+            document.getElementById('modalTitle').innerText = "คืนร่ม";
+            document.getElementById('borrowModal').classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('borrowModal').classList.remove('active'); }
+
+        async function submitData() {
+            const btn = document.getElementById('btnSubmit');
+            btn.disabled = true;
+            btn.innerText = "กำลังบันทึก...";
+
+            const id = document.getElementById('selectedUmbrellaId').value || document.getElementById('manualUmbrellaId').value;
+            const payload = {
+                action: 'recordData',
+                data: {
+                    umbrellaId: id,
+                    name: document.getElementById('studentName').value,
+                    studentId: document.getElementById('studentId').value,
+                    status: currentType === 'borrow' ? 'ยืม' : 'คืน'
+                }
+            };
+
+            const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+            const result = await res.json();
+            
+            if(result.status === 'success') {
+                alert(currentType === 'borrow' ? "ยืมสำเร็จ!" : `คืนสำเร็จ! ยืมไปทั้งหมด ${result.days} วัน`);
+                location.reload();
+            }
+            btn.disabled = false;
+        }
+
+        window.onload = refreshData;
+    </script>
+</body>
+</html>
